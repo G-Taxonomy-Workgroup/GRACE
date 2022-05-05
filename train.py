@@ -16,14 +16,20 @@ from torch_geometric.nn import GCNConv
 from model import Encoder, Model, drop_feature
 from eval import label_classification
 
+from gtaxo_graphgym.transform.perturbations.spectral import BandpassFiltering
 
-def train(model: Model, x, edge_index):
+
+def train(model: Model, data, aug=None):
     model.train()
     optimizer.zero_grad()
-    edge_index_1 = dropout_adj(edge_index, p=drop_edge_rate_1)[0]
-    edge_index_2 = dropout_adj(edge_index, p=drop_edge_rate_2)[0]
-    x_1 = drop_feature(x, drop_feature_rate_1)
-    x_2 = drop_feature(x, drop_feature_rate_2)
+
+    edge_index_1 = dropout_adj(data.edge_index, p=drop_edge_rate_1)[0]
+    x_1 = drop_feature(data.x, drop_feature_rate_1)
+
+    data = aug(data.cpu()).to('cuda') if aug is not None else data
+    edge_index_2 = dropout_adj(data.edge_index, p=drop_edge_rate_2)[0]
+    x_2 = drop_feature(data.x, drop_feature_rate_2)
+
     z1 = model(x_1, edge_index_1)
     z2 = model(x_2, edge_index_2)
 
@@ -34,11 +40,11 @@ def train(model: Model, x, edge_index):
     return loss.item()
 
 
-def test(model: Model, x, edge_index, y, final=False):
+def test(model: Model, data, final=False):
     model.eval()
-    z = model(x, edge_index)
+    z = model(data.x, data.edge_index)
 
-    label_classification(z, y, ratio=0.1)
+    label_classification(z, data.y, ratio=0.1)
 
 
 if __name__ == '__main__':
@@ -95,8 +101,9 @@ if __name__ == '__main__':
 
     start = t()
     prev = start
+    aug = BandpassFiltering('lo')
     for epoch in range(1, num_epochs + 1):
-        loss = train(model, data.x, data.edge_index)
+        loss = train(model, data, aug)
 
         now = t()
         print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}, '
@@ -104,4 +111,4 @@ if __name__ == '__main__':
         prev = now
 
     print("=== Final ===")
-    test(model, data.x, data.edge_index, data.y, final=True)
+    test(model, data, final=True)
