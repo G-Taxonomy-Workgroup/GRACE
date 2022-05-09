@@ -19,16 +19,23 @@ from eval import label_classification
 from gtaxo_graphgym.transform.perturbations.spectral import BandpassFiltering
 
 
-def train(model: Model, data, aug=None):
+def drop_edge_and_feat(data):
+    data_temp = data.clone()
+    edge_index = dropout_adj(data_temp.edge_index, p=drop_edge_rate_1)[0]
+    x = drop_feature(data_temp.x, drop_feature_rate_1)
+    data_temp.edge_index, data_temp.x = edge_index, x
+    return data_temp
+
+
+def train(model: Model, data, aug_1=None, aug_2=None):
     model.train()
     optimizer.zero_grad()
 
-    edge_index_1 = dropout_adj(data.edge_index, p=drop_edge_rate_1)[0]
-    x_1 = drop_feature(data.x, drop_feature_rate_1)
+    data_1 = aug_1(data.cpu()).to('cuda') if aug_1 is not None else drop_edge_and_feat(data)
+    edge_index_1, x_1 = data_1.edge_index, data_1.x
 
-    data = aug(data.cpu()).to('cuda') if aug is not None else data
-    edge_index_2 = dropout_adj(data.edge_index, p=drop_edge_rate_2)[0]
-    x_2 = drop_feature(data.x, drop_feature_rate_2)
+    data_2 = aug_2(data.cpu()).to('cuda') if aug_2 is not None else drop_edge_and_feat(data)
+    edge_index_2, x_2 = data_2.edge_index, data_2.x
 
     z1 = model(x_1, edge_index_1)
     z2 = model(x_2, edge_index_2)
@@ -101,9 +108,12 @@ if __name__ == '__main__':
 
     start = t()
     prev = start
-    aug = BandpassFiltering('lo')
+
+    aug_1 = lambda x: BandpassFiltering('lo')(drop_edge_and_feat(x))
+    aug_2 = lambda x: BandpassFiltering('lo')(drop_edge_and_feat(x))
+
     for epoch in range(1, num_epochs + 1):
-        loss = train(model, data, aug)
+        loss = train(model, data, aug_1, aug_2)
 
         now = t()
         print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}, '
