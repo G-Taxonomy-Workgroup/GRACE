@@ -20,21 +20,20 @@ from gtaxo_graphgym.transform.perturbations.spectral import BandpassFiltering
 
 
 def drop_edge_and_feat(data):
-    data_temp = data.clone()
-    edge_index = dropout_adj(data_temp.edge_index, p=drop_edge_rate_1)[0]
-    x = drop_feature(data_temp.x, drop_feature_rate_1)
-    data_temp.edge_index, data_temp.x = edge_index, x
-    return data_temp
+    edge_index = dropout_adj(data.edge_index, p=drop_edge_rate_1)[0]
+    x = drop_feature(data.x, drop_feature_rate_1)
+    data.edge_index, data.x = edge_index, x
+    return data
 
 
 def train(model: Model, data, aug_1=None, aug_2=None):
     model.train()
     optimizer.zero_grad()
 
-    data_1 = aug_1(data.cpu()).to('cuda') if aug_1 is not None else drop_edge_and_feat(data)
+    data_1 = aug_1(data.clone().cpu()).to('cuda') if aug_1 is not None else drop_edge_and_feat(data)
     edge_index_1, x_1 = data_1.edge_index, data_1.x
 
-    data_2 = aug_2(data.cpu()).to('cuda') if aug_2 is not None else drop_edge_and_feat(data)
+    data_2 = aug_2(data.clone().cpu()).to('cuda') if aug_2 is not None else drop_edge_and_feat(data)
     edge_index_2, x_2 = data_2.edge_index, data_2.x
 
     z1 = model(x_1, edge_index_1)
